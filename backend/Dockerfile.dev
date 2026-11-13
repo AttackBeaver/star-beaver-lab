@@ -12,17 +12,20 @@ RUN apk add --no-cache tzdata curl \
 # Слой с зависимостями кешируется, пока не меняются package*.json.
 COPY package*.json ./
 
-# Build-tools нужны ТОЛЬКО чтобы собрать нативный better-sqlite3 при npm ci.
-# После установки удаляем их — в рантайме не требуются (модуль уже скомпилирован в .node).
+# Build-tools нужны для сборки нативного better-sqlite3 и для prisma generate.
+# После установки клиента — удаляем build-tools (в рантайме не нужны).
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
     && if [ -f package-lock.json ]; then npm ci; else npm install; fi \
     && apk del .build-deps
 
-# Исходники. В dev они всё равно перекрываются bind-mount'ом из compose,
-# но копия нужна для случаев, когда хочется запустить образ без монтирования.
+# Копируем prisma-схему, генерируем клиент. Этот слой пересобирается
+# только при изменении schema.prisma — экономит время при правках в src/.
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Исходники. В dev перекрываются bind-mount'ом из compose.
 COPY . .
 
 EXPOSE 5000
 
-# npm run dev = nodemon --exec tsx src/index.ts (см. package.json)
 CMD ["npm", "run", "dev"]

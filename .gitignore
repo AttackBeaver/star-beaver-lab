@@ -17,6 +17,7 @@ build/
 # ===== Prisma =====
 backend/prisma/*.db
 backend/prisma/*.db-journal
+backend/prisma/seed-owner.ts
 # (migrations/ коммитим — это часть схемы)
 
 # ===== User data / uploads (не в git) =====
