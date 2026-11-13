@@ -1,0 +1,51 @@
+# ===== Dependencies =====
+node_modules/
+.pnp
+.pnp.js
+
+# ===== Build output =====
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+
+# ===== Prisma =====
+backend/prisma/*.db
+backend/prisma/*.db-journal
+# (migrations/ коммитим — это часть схемы)
+
+# ===== User data / uploads (не в git) =====
+backend/uploads/
+backend/sandbox-images/
+
+# ===== Служебные файлы (docs полностью вне git) =====
+docs/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ===== Logs =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# ===== Coverage =====
+coverage/
+
+# ===== Docker local overrides =====
+docker-compose.override.yml

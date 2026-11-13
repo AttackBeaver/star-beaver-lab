@@ -1,0 +1,75 @@
+// ============================================================
+// Star Beaver Lab — схема БД
+// Стек: PostgreSQL 16, Prisma 6 (migrate, НЕ push)
+// ============================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+// ============================================================
+// Роли
+// USER      — обычный пользователь (регистрация по умолчанию)
+// MODERATOR — модерация мемов/новостей, чистка контента
+// OWNER     — разработчик, полный доступ
+// ============================================================
+enum Role {
+  USER
+  MODERATOR
+  OWNER
+}
+
+// ============================================================
+// Пользователь
+// ============================================================
+model User {
+  id           Int       @id @default(autoincrement())
+
+  // email обязателен: защита от мультиаккаунтов даже без верификации —
+  // нельзя дважды зарегистрироваться с одним адресом.
+  // Верификация письмом — отдельный блок, здесь только уникальность в БД.
+  email        String    @unique
+
+  // username опционален: отображаемое имя в профиле.
+  // Пользователь может задать позже, если не задал при регистрации.
+  username     String?   @unique
+
+  fullName     String
+  passwordHash String
+  role         Role      @default(USER)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLogin    DateTime?
+
+  // ===== Связи будущих блоков =====
+  logs         Log[]     @relation("UserLogs")
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Аудит-логи
+// Пишутся с первого запроса (middleware auditLog + logAction()).
+// При удалении пользователя логи сохраняются: userId → null.
+// ============================================================
+model Log {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation("UserLogs", fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

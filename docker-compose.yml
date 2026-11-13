@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sbl-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sbl
+      POSTGRES_PASSWORD: sbl_dev_pw
+      POSTGRES_DB: star_beaver_lab
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sbl -d star_beaver_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: sbl-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - ./backend/.env
+    environment:
+      # Внутри контейнера hostname БД = имя сервиса (postgres), не localhost
+      - DATABASE_URL=postgresql://sbl:sbl_dev_pw@postgres:5432/star_beaver_lab
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

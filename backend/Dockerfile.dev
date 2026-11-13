@@ -1,0 +1,28 @@
+# ===== Dev-образ (только для docker-compose.yml) =====
+# Прод-образ не нужен: на сервере backend запускается нативно через PM2.
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Постоянные пакеты рантайма: tzdata — корректное время, curl — для healthcheck'ов.
+RUN apk add --no-cache tzdata curl \
+    && cp /usr/share/zoneinfo/Europe/Moscow /etc/localtime \
+    && echo "Europe/Moscow" > /etc/timezone
+
+# Слой с зависимостями кешируется, пока не меняются package*.json.
+COPY package*.json ./
+
+# Build-tools нужны ТОЛЬКО чтобы собрать нативный better-sqlite3 при npm ci.
+# После установки удаляем их — в рантайме не требуются (модуль уже скомпилирован в .node).
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+    && if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+    && apk del .build-deps
+
+# Исходники. В dev они всё равно перекрываются bind-mount'ом из compose,
+# но копия нужна для случаев, когда хочется запустить образ без монтирования.
+COPY . .
+
+EXPOSE 5000
+
+# npm run dev = nodemon --exec tsx src/index.ts (см. package.json)
+CMD ["npm", "run", "dev"]

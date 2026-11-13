@@ -1,0 +1,36 @@
+# ===== Зависимости и сборка =====
+node_modules
+dist
+*.tsbuildinfo
+
+# ===== Локальные артефакты Prisma =====
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev.db*
+
+# ===== Пользовательские данные (монтируются volume'ом / создаются в рантайме) =====
+uploads
+sandbox-images
+
+# ===== Env и секреты =====
+.env
+.env.*
+!.env.example
+
+# ===== Git / IDE / OS =====
+.git
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ===== Логи =====
+*.log
+logs
+
+# ===== Документация внутри backend (если появится) =====
+README.md
