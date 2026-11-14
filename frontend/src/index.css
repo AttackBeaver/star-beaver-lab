@@ -1,0 +1,52 @@
+/* Подключение шрифта Cascadia Code (тот же CDN, что в старом проекте) */
+@import url('https://fonts.cdnfonts.com/css/cascadia-code');
+
+/* Базовые директивы Tailwind 3 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* color-scheme сообщает браузеру, что мы поддерживаем тёмную тему.
+     Без этого скроллбары, поля ввода, autofill ведут себя неконсистентно
+     при переключении темы. Ставим через CSS-переменную, чтобы работало
+     и в light, и в dark. */
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    /* antialiased: тонкие шрифты не «жирнятся» на Retina/4K */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Плавное переключение темы для всех элементов.
+     Только для цвета — не для transform/opacity, чтобы анимации
+     (fadeIn, slideDown) не растягивались до 300 мс. */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  /* Уважение к пользовательским настройкам: если включён reduced-motion,
+     отключаем все анимации и переходы. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
