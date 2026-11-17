@@ -6,7 +6,8 @@ import { logAction, LogActions } from '../utils/logger';
 import { getAuthUser, JWT_SECRET } from '../middleware/auth';
 
 // ============================================================
-// Аутентификация: register / login / logout / profile.
+// Аутентификация: register / login / logout / profile + блок 1:
+// updateProfile / changePassword.
 // - Пароль: bcryptjs, 10 раундов (OWASP baseline).
 // - JWT: payload { id }, срок жизни из JWT_EXPIRES_IN (7d по умолчанию).
 // - Валидация: ручная (без zod/react-hook-form на бэке — решение блока 0).
@@ -266,4 +267,190 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
   }
 
   res.json(user);
+};
+
+// ============================================================
+// PATCH /api/auth/profile
+// Body: { fullName?, username? }  (username: string | null; null — очистить)
+// - email НЕ меняется (верификация по почте — блок 8+).
+// - Требуется хотя бы одно поле.
+// ============================================================
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  const auth = getAuthUser(req);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // fullName: опционально; если присутствует — непустая строка ≤100
+  let newFullName: string | undefined;
+  if (body['fullName'] !== undefined) {
+    const raw = body['fullName'];
+    if (typeof raw !== 'string') {
+      res.status(400).json({ error: 'fullName must be a string' });
+      return;
+    }
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) {
+      res.status(400).json({ error: 'fullName cannot be empty' });
+      return;
+    }
+    if (trimmed.length > MAX_FULL_NAME_LENGTH) {
+      res.status(400).json({ error: `fullName must be at most ${MAX_FULL_NAME_LENGTH} characters` });
+      return;
+    }
+    newFullName = trimmed;
+  }
+
+  // username: опционально; null или пустая строка → очистить; строка → валидировать
+  let newUsername: string | null | undefined;
+  if (body['username'] !== undefined) {
+    const raw = body['username'];
+    if (raw === null) {
+      newUsername = null;
+    } else if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed.length === 0) {
+        newUsername = null;
+      } else {
+        if (!USERNAME_REGEX.test(trimmed)) {
+          res.status(400).json({
+            error: 'Username must be 3-30 characters: letters, digits, underscore',
+          });
+          return;
+        }
+        newUsername = trimmed;
+      }
+    } else {
+      res.status(400).json({ error: 'username must be a string or null' });
+      return;
+    }
+  }
+
+  if (newFullName === undefined && newUsername === undefined) {
+    res.status(400).json({ error: 'Nothing to update' });
+    return;
+  }
+
+  // Pre-check уникальности username (если меняется на не-null и не совпадает с текущим)
+  if (newUsername !== undefined && newUsername !== null) {
+    const existing = await prisma.user.findUnique({
+      where: { username: newUsername },
+      select: { id: true },
+    });
+    if (existing && existing.id !== auth.id) {
+      res.status(409).json({ error: 'Username already taken' });
+      return;
+    }
+  }
+
+  // exactOptionalPropertyTypes: собираем data только из заданных полей,
+  // чтобы не передавать `undefined` явно.
+  const data: { fullName?: string; username?: string | null } = {};
+  if (newFullName !== undefined) data.fullName = newFullName;
+  if (newUsername !== undefined) data.username = newUsername;
+
+  let updated: PublicUser;
+  try {
+    updated = await prisma.user.update({
+      where: { id: auth.id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        fullName: true,
+        role: true,
+        createdAt: true,
+        lastLogin: true,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      // Race condition: другой запрос занял username между pre-check и update.
+      res.status(409).json({ error: 'Username already taken' });
+      return;
+    }
+    console.error('[authController.updateProfile] DB error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+    return;
+  }
+
+  const changed: string[] = [];
+  if (newFullName !== undefined) changed.push('fullName');
+  if (newUsername !== undefined) changed.push('username');
+
+  await logAction({
+    action: LogActions.PROFILE_UPDATE,
+    userId: auth.id,
+    details: `changed=${changed.join(',')}`,
+    req,
+  });
+
+  res.json(toPublicUser(updated));
+};
+
+// ============================================================
+// POST /api/auth/change-password
+// Body: { currentPassword, newPassword }
+// - Текущий пароль обязателен (защита от CSRF/угнанной сессии).
+// - Новый пароль не может совпадать с текущим.
+// - После смены текущий JWT остаётся валидным (SPA-норма; token versioning — не в блоке 1).
+// ============================================================
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  const auth = getAuthUser(req);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const currentPassword = asString(body['currentPassword']);
+  const newPassword = asString(body['newPassword']);
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    return;
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+    return;
+  }
+  if (newPassword.length > MAX_PASSWORD_LENGTH) {
+    res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD_LENGTH} characters` });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: auth.id },
+    select: { id: true, passwordHash: true },
+  });
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) {
+    await logAction({
+      action: LogActions.PASSWORD_CHANGE_FAILED,
+      userId: auth.id,
+      details: 'reason=bad_current',
+      req,
+    });
+    res.status(401).json({ error: 'Current password is incorrect' });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: 'New password must be different from current' });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.user.update({
+    where: { id: auth.id },
+    data: { passwordHash },
+  });
+
+  await logAction({
+    action: LogActions.PASSWORD_CHANGE,
+    userId: auth.id,
+    req,
+  });
+
+  res.json({ ok: true });
 };

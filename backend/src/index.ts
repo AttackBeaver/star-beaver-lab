@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 
 import authRoutes from './routes/authRoutes';
+import adminRoutes from './routes/adminRoutes';
 import { auditLog } from './middleware/auditLog';
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/uploads', express.static(uploadDir));
 
 // ===== Маршруты =====
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ===== Health =====
 app.get('/api/health', (_req, res) => {
@@ -42,11 +44,35 @@ app.use('/api', (_req, res) => {
 });
 
 // ===== Глобальный error-handler =====
+// Уважаем statusCode из ошибки (body-parser → 400, Prisma-обёртки → свои),
+// иначе 500. Внутренние сообщения (>=500) наружу не светим.
 app.use(
   (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('[unhandled]', err);
     if (res.headersSent) return;
-    res.status(500).json({ error: 'Internal server error' });
+
+    const status =
+      typeof err === 'object' &&
+      err !== null &&
+      'statusCode' in err &&
+      typeof (err as { statusCode: unknown }).statusCode === 'number'
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+
+    if (status >= 500) {
+      console.error('[unhandled]', err);
+    }
+
+    const message =
+      typeof err === 'object' &&
+      err !== null &&
+      'message' in err &&
+      typeof (err as { message: unknown }).message === 'string'
+        ? (err as { message: string }).message
+        : 'Internal server error';
+
+    res.status(status).json({
+      error: status >= 500 ? 'Internal server error' : message,
+    });
   }
 );
 

@@ -10,13 +10,17 @@ import {
   ArrowRightOnRectangleIcon,
   UserPlusIcon,
   UserCircleIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 
 // ============================================================
-// Упрощённый Layout для блока 0.
-// Навигация: только Home (остальные разделы — Полигон, Мемы,
-// Криптолаба, Новости — появятся в блоках 2–6).
-// Роль-специфичные ссылки (Админ для OWNER, Профиль) — в блоках 1 и 7.
+// Layout.
+// Навигация:
+//   - Главная — все.
+//   - Профиль — залогиненные.
+//   - Журнал — OWNER (блок 1).
+//   - Полигон / Мемы / Криптолаба / Новости — блоки 2–6.
+// Guard на уровне роутов в App.tsx; здесь только видимость ссылок.
 // ============================================================
 
 interface LayoutProps {
@@ -24,8 +28,6 @@ interface LayoutProps {
 }
 
 // ===== Скролл-детектор через useSyncExternalStore =====
-// Это «внешний источник» (window.scrollY), а не состояние React.
-// Правило set-state-in-effect не нарушается: setState в effect нет.
 const subscribeToScroll = (cb: () => void): (() => void) => {
   window.addEventListener('scroll', cb, { passive: true });
   return () => window.removeEventListener('scroll', cb);
@@ -45,6 +47,22 @@ const Layout = ({ children }: LayoutProps) => {
   );
 
   const isActive = (path: string): boolean => location.pathname === path;
+
+  // Классы для пункта десктопного меню.
+  const desktopLinkClass = (path: string): string =>
+    `px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+      isActive(path)
+        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/70 hover:text-blue-600 dark:hover:text-blue-400'
+    }`;
+
+  // Классы для пункта мобильной панели (плоские, компактные).
+  const mobileLinkClass = (path: string): string =>
+    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+      isActive(path)
+        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/70'
+    }`;
 
   const getThemeIcon = (): React.ReactElement => {
     switch (theme) {
@@ -76,8 +94,6 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   const handleLogout = (): void => {
-    // logout сам ловит ошибки и ставит user=null.
-    // void — явно говорим «не жду промис» (правило no-floating-promises).
     void logout();
   };
 
@@ -102,29 +118,35 @@ const Layout = ({ children }: LayoutProps) => {
 
             {/* Десктопная навигация */}
             <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-              <Link
-                to="/"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isActive('/')
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/70 hover:text-blue-600 dark:hover:text-blue-400'
-                }`}
-              >
+              <Link to="/" className={desktopLinkClass('/')}>
                 <span className="flex items-center gap-1.5">
                   <HomeIcon className="w-4 h-4" />
                   Главная
                 </span>
               </Link>
 
-              {/* Профиль — появится в блоке 1 */}
+              {/* Профиль — блок 1, для всех залогиненных */}
               {user && (
-                <span
-                  className="px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1.5 cursor-default"
-                  title="Раздел «Профиль» появится в следующем релизе"
+                <Link
+                  to="/profile"
+                  className={desktopLinkClass('/profile')}
+                  title={user.fullName}
                 >
-                  <UserCircleIcon className="w-4 h-4" />
-                  {user.fullName}
-                </span>
+                  <span className="flex items-center gap-1.5">
+                    <UserCircleIcon className="w-4 h-4" />
+                    Профиль
+                  </span>
+                </Link>
+              )}
+
+              {/* Журнал — блок 1, только OWNER */}
+              {user?.role === 'OWNER' && (
+                <Link to="/admin/logs" className={desktopLinkClass('/admin/logs')}>
+                  <span className="flex items-center gap-1.5">
+                    <ClipboardDocumentListIcon className="w-4 h-4" />
+                    Журнал
+                  </span>
+                </Link>
               )}
             </nav>
 
@@ -186,14 +208,26 @@ const Layout = ({ children }: LayoutProps) => {
 
         {/* Мобильная панель (всегда видна на <md) */}
         <div className="md:hidden border-t border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
-          <div className="px-4 py-3 flex items-center justify-between gap-2">
-            <Link
-              to="/"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/70 transition-all"
-            >
-              <HomeIcon className="w-4 h-4" />
-              Главная
-            </Link>
+          <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <Link to="/" className={mobileLinkClass('/')}>
+                <HomeIcon className="w-4 h-4" />
+                Главная
+              </Link>
+              {user && (
+                <Link to="/profile" className={mobileLinkClass('/profile')}>
+                  <UserCircleIcon className="w-4 h-4" />
+                  Профиль
+                </Link>
+              )}
+              {user?.role === 'OWNER' && (
+                <Link to="/admin/logs" className={mobileLinkClass('/admin/logs')}>
+                  <ClipboardDocumentListIcon className="w-4 h-4" />
+                  Журнал
+                </Link>
+              )}
+            </div>
+
             {user ? (
               <button
                 type="button"

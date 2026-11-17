@@ -20,6 +20,9 @@ export const LogActions = {
   LOGIN_FAILED: 'LOGIN_FAILED',
   LOGOUT: 'LOGOUT',
   REGISTER: 'REGISTER',
+  PROFILE_UPDATE: 'PROFILE_UPDATE',
+  PASSWORD_CHANGE: 'PASSWORD_CHANGE',
+  PASSWORD_CHANGE_FAILED: 'PASSWORD_CHANGE_FAILED',
 } as const;
 
 export type LogActionName = (typeof LogActions)[keyof typeof LogActions];

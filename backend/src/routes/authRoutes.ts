@@ -4,21 +4,30 @@ import {
   login,
   logout,
   getProfile,
+  updateProfile,
+  changePassword,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 
+// ============================================================
+// Роуты /api/auth/*
+// Блок 0: register / login / logout / profile.
+// Блок 1: + PATCH profile / POST change-password.
+//
+// ВАЖНО: /api/auth/* исключён из middleware auditLog
+// (см. middleware/auditLog.ts) — аудит здесь пишется вручную
+// через logAction в контроллерах, чтобы не дублировать события.
+// ============================================================
+
 const router = Router();
 
-// POST /api/auth/register — публичный
 router.post('/register', register);
-
-// POST /api/auth/login — публичный
 router.post('/login', login);
-
-// POST /api/auth/logout — требует токен
 router.post('/logout', authenticate, logout);
 
-// GET /api/auth/profile — требует токен
 router.get('/profile', authenticate, getProfile);
+router.patch('/profile', authenticate, updateProfile);
+
+router.post('/change-password', authenticate, changePassword);
 
 export default router;

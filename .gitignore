@@ -50,3 +50,5 @@ coverage/
 
 # ===== Docker local overrides =====
 docker-compose.override.yml
+
+package-lock.json -diff
