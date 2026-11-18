@@ -2,7 +2,7 @@
 
 Открытая независимая IT лаборатория.
 
-**Версия:** 0.2.0 (в разработке) · **Разработчик:** Стариков А.В. ([@AttackBeaver](https://github.com/AttackBeaver))
+**Версия:** 0.3.0 (в разработке) · **Разработчик:** Стариков А.В. ([@AttackBeaver](https://github.com/AttackBeaver))
 
 > ⚠️ Проект в активной разработке. API и схема БД могут меняться без обратной совместимости до релиза v1.0.0.
 
@@ -26,6 +26,19 @@
 - **Расширенный аудит:** `PROFILE_UPDATE`, `PASSWORD_CHANGE`, `PASSWORD_CHANGE_FAILED`.
 - **Улучшенный error-handler:** уважает `statusCode` из ошибки (body-parser-мусор → 400, а не 500).
 
+### Блок 2 — мемы
+
+- **Лента** (`/memes`): публичная, пагинация (10/25/50), URL-driven. Карточки с автором, датой, лайками.
+- **Загрузка** (только auth): drag&drop (react-dropzone) + title/description (опционально), прогресс-бар. Лимиты: изображения — 10 MB, видео — 100 MB. Форматы: `jpg/jpeg/png/gif/webp` + `mp4/webm`. **SVG не разрешён** (XSS).
+- **Проверка magic bytes** — реальный тип определяется по содержимому, а не по `Content-Type` от клиента. Fake-jpg с текстом внутри отбивается 400.
+- **Видео:** `ffmpeg` извлекает первый кадр → poster 480×480 (JPEG). Если ffmpeg упал — мем всё равно сохраняется, poster = `null`, фронт рендерит `<video preload="metadata">` fallback. Клик на постер → `<video controls autoPlay>`.
+- **Лайки:** toggle, оптимистичное обновление + reconcile с сервером. Один лайк на мем от пользователя (`@@unique([memeId, userId])`).
+- **Soft-delete:** автор своего мема, `MODERATOR` и `OWNER` — любой. Файл на диске **не удаляется**, запись остаётся (`deletedAt`, `deletedById`), из ленты скрыта.
+- **Корзина** (`/admin/memes`, `MODERATOR`/`OWNER`): таблица удалённых, restore per-row, URL-driven пагинация.
+- **ZIP-экспорт** (`GET /api/admin/memes/export.zip`, `MODERATOR`/`OWNER`): все живые мемы, имена `<id>_<originalName>`, `archiver` со `store: true` (без сжатия — скорость важнее, медиа уже сжаты).
+- **Топ-3 авторов** (`GET /api/memes/top-authors`): по числу живых мемов, bar на странице ленты.
+- **Аудит:** `MEME_UPLOAD`, `MEME_DELETE`, `MEME_RESTORE`, `MEME_EXPORT_ZIP`.
+
 ## Технологический стек
 
 **Frontend**
@@ -33,6 +46,7 @@
 - React 19, TypeScript, Vite 6
 - Tailwind CSS 3, React Router 7
 - Axios, Heroicons, Headless UI
+- React Dropzone (drag&drop загрузок, блок 2)
 
 **Backend**
 
@@ -40,6 +54,7 @@
 - Prisma 6
 - JWT, bcryptjs
 - Multer, Dockerode, Archiver 7.x, better-sqlite3, pg
+- ffmpeg (системный пакет, генерация постеров видео, блок 2)
 
 **База данных**
 
@@ -56,26 +71,27 @@
 star-beaver-lab/
 ├── backend/
 │   ├── src/
-│   │   ├── controllers/      # authController, adminController
+│   │   ├── controllers/      # authController, adminController, memeController
 │   │   ├── middleware/       # authenticate, allowRoles, auditLog
-│   │   ├── routes/           # authRoutes, adminRoutes
-│   │   ├── utils/            # prisma (синглтон), logger (аудит)
+│   │   ├── routes/           # authRoutes, adminRoutes, memeRoutes
+│   │   ├── utils/            # prisma, logger, upload (multer+magic bytes), videoPoster (ffmpeg)
 │   │   └── index.ts          # точка входа
 │   ├── prisma/
 │   │   ├── schema.prisma
 │   │   ├── migrations/
 │   │   └── seed-owner.ts     # не в git (см. .gitignore)
 │   ├── uploads/              # не в git
-│   ├── Dockerfile.dev        # только для dev
+│   │   └── memes/            # YYYY/MM/<uuid>.<ext>, _tmp/ для staging
+│   ├── Dockerfile.dev        # только для dev (node:22-alpine + tzdata/curl/ffmpeg)
 │   ├── .env.example          # плейсхолдеры (копируется в .env)
 │   └── package.json
 ├── frontend/
 │   ├── src/
 │   │   ├── components/       # Layout
 │   │   ├── hooks/            # useAuth, useTheme
-│   │   ├── pages/            # Home, Profile, Login, Register
-│   │   │   └── admin/        # Logs (только OWNER)
-│   │   ├── services/         # api.ts (axios)
+│   │   ├── pages/            # Home, Memes, Profile, Login, Register
+│   │   │   └── admin/        # Logs (OWNER), Memes (MODERATOR/OWNER)
+│   │   ├── services/         # api.ts (axios), memesApi.ts
 │   │   ├── App.tsx
 │   │   ├── index.css
 │   │   └── main.tsx
@@ -94,6 +110,9 @@ star-beaver-lab/
 - **Пароли:** `bcryptjs`, 10 раундов.
 - **Anti-enumeration:** при логине возвращается `Invalid credentials` и при неверном email, и при неверном пароле.
 - **Смена пароля:** требуется текущий пароль (защита от CSRF/угнанной сессии). `PASSWORD_CHANGE_FAILED` пишется в аудит при неверном текущем.
+- **Загрузка файлов (блок 2):** magic-bytes по содержимому (не доверяем `Content-Type`), лимит 10 MB для изображений / 100 MB для видео, SVG **не разрешён** (XSS через `<script>` внутри SVG), `originalName` очищается от control chars и path separators, файлы складываются в `uploads/memes/YYYY/MM/<uuid>.<ext>` с именем-`uuid` (не пользовательским).
+- **Path traversal:** `deleteStoredFile` проверяет `startsWith('uploads/memes/')`, `posterPath`/`filePath` из БД не могут указывать за пределы `uploads/memes/`.
+- **ffmpeg-постер:** таймаут 30 сек, `SIGKILL` при зависании. Не блокирует сохранение мема при сбое.
 - **CORS:** `cors()` без ограничений origin — допустимо в dev (Vite proxy), в проде будет ограничено конкретным доменом (блок 9).
 - **JWT_SECRET:** fail-fast при старте, если не задан. Сервер не запустится с пустым секретом.
 
@@ -110,6 +129,10 @@ star-beaver-lab/
 | `PROFILE_UPDATE` | PATCH профиля | `changed=fullName,username` |
 | `PASSWORD_CHANGE` | успешная смена пароля | — |
 | `PASSWORD_CHANGE_FAILED` | неверный текущий пароль | `reason=bad_current` |
+| `MEME_UPLOAD` | загрузка мема | `memeId=... media=IMAGE\|VIDEO size=...` |
+| `MEME_DELETE` | soft-delete | `memeId=... byAuthor=true\|false` |
+| `MEME_RESTORE` | восстановление | `memeId=...` |
+| `MEME_EXPORT_ZIP` | экспорт архива | `count=...` |
 | `SEED_OWNER_CREATED` / `SEED_OWNER_PROMOTED` | seed-скрипт | `email=...` |
 
 Все прочие мутации (не `/api/auth/*`) логируются автоматически middleware `auditLog`: `action = "<METHOD> <path>"`, `details` — тело запроса (multipart → `'[multipart omitted]'`), `ip` — из `X-Real-IP → X-Forwarded-For → req.ip`.
