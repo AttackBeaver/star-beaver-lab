@@ -2,25 +2,25 @@ import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import Home from './pages/Home';
+import Memes from './pages/Memes';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Profile from './pages/Profile';
 import Logs from './pages/admin/Logs';
+import MemesAdmin from './pages/admin/Memes';
 
 // ============================================================
 // Роутинг SPA.
-// - loading (первичная загрузка профиля) блокирует всё: спиннер,
-//   никаких миганий «гость → залогинен».
-// - /login, /register — вне Layout (полноэкранные карточки).
-//   Если user уже есть — Navigate на /.
-// - Остальное — в Layout.
-// - /profile — только для залогиненных.
-// - /admin/logs — только для OWNER. USER/MODERATOR → /, гость → /login.
-// - 404 — inline в Layout (свой роут path="*").
+// - loading (первичная загрузка профиля) блокирует всё: спиннер.
+// - /login, /register — вне Layout.
+// - /memes — публичная лента (upload/like требуют auth внутри контроллера).
+// - /profile — только auth.
+// - /admin/logs — только OWNER.
+// - /admin/memes — MODERATOR/OWNER.
+// - 404 — inline в Layout.
 //
 // Guard'ы здесь — UX, не безопасность. Реальная защита — на бэке
-// (authenticate + allowRoles). Если гость введёт /admin/logs руками —
-// Navigate сработает раньше, чем что-либо отрендерится.
+// (authenticate + allowRoles).
 // ============================================================
 
 const App = () => {
@@ -60,6 +60,16 @@ const App = () => {
           }
         />
 
+        {/* ===== Мемы (публичная лента) ===== */}
+        <Route
+          path="/memes"
+          element={
+            <Layout>
+              <Memes />
+            </Layout>
+          }
+        />
+
         {/* ===== Профиль (только для залогиненных) ===== */}
         <Route
           path="/profile"
@@ -85,6 +95,22 @@ const App = () => {
             ) : (
               <Layout>
                 <Logs />
+              </Layout>
+            )
+          }
+        />
+
+        {/* ===== Корзина мемов (MODERATOR/OWNER) ===== */}
+        <Route
+          path="/admin/memes"
+          element={
+            !user ? (
+              <Navigate to="/login" replace />
+            ) : user.role !== 'MODERATOR' && user.role !== 'OWNER' ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Layout>
+                <MemesAdmin />
               </Layout>
             )
           }

@@ -23,6 +23,10 @@ export const LogActions = {
   PROFILE_UPDATE: 'PROFILE_UPDATE',
   PASSWORD_CHANGE: 'PASSWORD_CHANGE',
   PASSWORD_CHANGE_FAILED: 'PASSWORD_CHANGE_FAILED',
+  MEME_UPLOAD: 'MEME_UPLOAD',
+  MEME_DELETE: 'MEME_DELETE',
+  MEME_RESTORE: 'MEME_RESTORE',
+  MEME_EXPORT_ZIP: 'MEME_EXPORT_ZIP',
 } as const;
 
 export type LogActionName = (typeof LogActions)[keyof typeof LogActions];

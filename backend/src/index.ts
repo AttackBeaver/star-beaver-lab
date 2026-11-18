@@ -5,6 +5,7 @@ import fs from 'fs';
 
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
+import memeRoutes from './routes/memeRoutes';
 import { auditLog } from './middleware/auditLog';
 
 const app = express();
@@ -17,7 +18,7 @@ app.use(express.json({ limit: '1mb' }));
 // ===== Аудит: все мутации, кроме /api/auth/* =====
 app.use(auditLog);
 
-// ===== Статика uploads (используется в блоках 2–3) =====
+// ===== Статика uploads (мемы: /uploads/memes/YYYY/MM/<file>) =====
 const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -26,6 +27,7 @@ app.use('/uploads', express.static(uploadDir));
 
 // ===== Маршруты =====
 app.use('/api/auth', authRoutes);
+app.use('/api/memes', memeRoutes);
 app.use('/api/admin', adminRoutes);
 
 // ===== Health =====
@@ -44,7 +46,7 @@ app.use('/api', (_req, res) => {
 });
 
 // ===== Глобальный error-handler =====
-// Уважаем statusCode из ошибки (body-parser → 400, Prisma-обёртки → свои),
+// Уважаем statusCode из ошибки (body-parser → 400, UploadError → 413/400),
 // иначе 500. Внутренние сообщения (>=500) наружу не светим.
 app.use(
   (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

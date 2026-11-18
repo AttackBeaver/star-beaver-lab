@@ -11,15 +11,19 @@ import {
   UserPlusIcon,
   UserCircleIcon,
   ClipboardDocumentListIcon,
+  FaceSmileIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 // ============================================================
 // Layout.
 // Навигация:
 //   - Главная — все.
+//   - Мемы — все (лента публичная, блок 2).
 //   - Профиль — залогиненные.
+//   - Корзина мемов — MODERATOR/OWNER.
 //   - Журнал — OWNER (блок 1).
-//   - Полигон / Мемы / Криптолаба / Новости — блоки 2–6.
+//   - Полигон / Криптолаба / Новости — блоки 3–6.
 // Guard на уровне роутов в App.tsx; здесь только видимость ссылок.
 // ============================================================
 
@@ -47,8 +51,9 @@ const Layout = ({ children }: LayoutProps) => {
   );
 
   const isActive = (path: string): boolean => location.pathname === path;
+  const isModOrOwner = user?.role === 'MODERATOR' || user?.role === 'OWNER';
+  const isOwner = user?.role === 'OWNER';
 
-  // Классы для пункта десктопного меню.
   const desktopLinkClass = (path: string): string =>
     `px-3 py-2 rounded-lg text-sm font-medium transition-all ${
       isActive(path)
@@ -56,7 +61,6 @@ const Layout = ({ children }: LayoutProps) => {
         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/70 dark:hover:bg-gray-800/70 hover:text-blue-600 dark:hover:text-blue-400'
     }`;
 
-  // Классы для пункта мобильной панели (плоские, компактные).
   const mobileLinkClass = (path: string): string =>
     `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
       isActive(path)
@@ -125,7 +129,13 @@ const Layout = ({ children }: LayoutProps) => {
                 </span>
               </Link>
 
-              {/* Профиль — блок 1, для всех залогиненных */}
+              <Link to="/memes" className={desktopLinkClass('/memes')}>
+                <span className="flex items-center gap-1.5">
+                  <FaceSmileIcon className="w-4 h-4" />
+                  Мемы
+                </span>
+              </Link>
+
               {user && (
                 <Link
                   to="/profile"
@@ -139,8 +149,20 @@ const Layout = ({ children }: LayoutProps) => {
                 </Link>
               )}
 
-              {/* Журнал — блок 1, только OWNER */}
-              {user?.role === 'OWNER' && (
+              {isModOrOwner && (
+                <Link
+                  to="/admin/memes"
+                  className={desktopLinkClass('/admin/memes')}
+                  title="Корзина мемов"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <TrashIcon className="w-4 h-4" />
+                    Корзина
+                  </span>
+                </Link>
+              )}
+
+              {isOwner && (
                 <Link to="/admin/logs" className={desktopLinkClass('/admin/logs')}>
                   <span className="flex items-center gap-1.5">
                     <ClipboardDocumentListIcon className="w-4 h-4" />
@@ -214,13 +236,23 @@ const Layout = ({ children }: LayoutProps) => {
                 <HomeIcon className="w-4 h-4" />
                 Главная
               </Link>
+              <Link to="/memes" className={mobileLinkClass('/memes')}>
+                <FaceSmileIcon className="w-4 h-4" />
+                Мемы
+              </Link>
               {user && (
                 <Link to="/profile" className={mobileLinkClass('/profile')}>
                   <UserCircleIcon className="w-4 h-4" />
                   Профиль
                 </Link>
               )}
-              {user?.role === 'OWNER' && (
+              {isModOrOwner && (
+                <Link to="/admin/memes" className={mobileLinkClass('/admin/memes')}>
+                  <TrashIcon className="w-4 h-4" />
+                  Корзина
+                </Link>
+              )}
+              {isOwner && (
                 <Link to="/admin/logs" className={mobileLinkClass('/admin/logs')}>
                   <ClipboardDocumentListIcon className="w-4 h-4" />
                   Журнал
